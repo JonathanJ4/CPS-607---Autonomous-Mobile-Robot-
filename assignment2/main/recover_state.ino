@@ -1,5 +1,5 @@
 // Tunables
-const float RECOVER_CM = 15;       // distance to back up (cm)
+const float RECOVER_CM = 20;       // distance to back up (cm)
 
 // Vars
 unsigned long recoverTime = 0;     // how long to drive back (ms), calculated

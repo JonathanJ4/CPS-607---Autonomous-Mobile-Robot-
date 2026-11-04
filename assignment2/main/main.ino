@@ -3,7 +3,14 @@ extern int line_sensor;
 extern int left_ir_sensor;
 extern int right_ir_sensor;
 
-enum State { SEARCH, APPROACH, IDENTIFY, REJECT, PUSH, DONE, RELOCATE, RECOVER };
+enum State { SEARCH,
+             APPROACH,
+             IDENTIFY,
+             REJECT,
+             PUSH,
+             DONE,
+             RELOCATE,
+             RECOVER };
 State currentState = SEARCH;
 
 // u = ultrasonic | i = IR | l = line | s = search | a = approach | d = identify
@@ -13,102 +20,102 @@ unsigned long lastPrintTime = 0;
 const unsigned long PRINT_PERIOD_MS = 200;
 
 void changeState(int newState) {
-    State previous = currentState;
-    currentState = (State)newState;
-    stopMove();
+  State previous = currentState;
+  currentState = (State)newState;
+  stopMove();
 
-    Serial.print("State -> ");
-    if (newState == SEARCH) Serial.println("SEARCH");
-    if (newState == APPROACH) Serial.println("APPROACH");
-    if (newState == IDENTIFY) Serial.println("IDENTIFY");
-    if (newState == REJECT) Serial.println("REJECT");
-    if (newState == PUSH) Serial.println("PUSH");
-    if (newState == DONE) Serial.println("DONE");
-    if (newState == RELOCATE) Serial.println("RELOCATE");
-    if (newState == RECOVER) Serial.println("RECOVER");
+  Serial.print("State -> ");
+  if (newState == SEARCH) Serial.println("SEARCH");
+  if (newState == APPROACH) Serial.println("APPROACH");
+  if (newState == IDENTIFY) Serial.println("IDENTIFY");
+  if (newState == REJECT) Serial.println("REJECT");
+  if (newState == PUSH) Serial.println("PUSH");
+  if (newState == DONE) Serial.println("DONE");
+  if (newState == RELOCATE) Serial.println("RELOCATE");
+  if (newState == RECOVER) Serial.println("RECOVER");
 
-    if (newState == SEARCH) searchStart();
-    if (newState == APPROACH) approachStart();
-    if (newState == IDENTIFY) identifyStart(previous == PUSH);
-    if (newState == REJECT) rejectStart();
-    if (newState == PUSH) pushStart();
-    if (newState == DONE) doneStart();
-    if (newState == RELOCATE) relocateStart();
-    if (newState == RECOVER) recoverStart();
+  if (newState == SEARCH) searchStart();
+  if (newState == APPROACH) approachStart();
+  if (newState == IDENTIFY) identifyStart(previous == PUSH);
+  if (newState == REJECT) rejectStart();
+  if (newState == PUSH) pushStart();
+  if (newState == DONE) doneStart();
+  if (newState == RELOCATE) relocateStart();
+  if (newState == RECOVER) recoverStart();
 }
 
 void setup() {
-    Serial.begin(9600);
+  Serial.begin(9600);
 
-    motorSetup();
-    ultrasonicSetup();
-    irSensorSetup();
-    lineSensorSetup();
+  motorSetup();
+  ultrasonicSetup();
+  irSensorSetup();
+  lineSensorSetup();
 
-    Serial.println("Print modes: u = Ultrasonic | i = IR | l = Line | s = Search | a = Approach | d = Identify | e = Reject | p = Push | r = Relocate | c = Recover | b = All | x = Stop");
+  Serial.println("Print modes: u = Ultrasonic | i = IR | l = Line | s = Search | a = Approach | d = Identify | e = Reject | p = Push | r = Relocate | c = Recover | b = All | x = Stop");
 
-    delay(2000);   // time to put the robot down
-    changeState(SEARCH);
+  delay(2000);  // time to put the robot down
+  changeState(SEARCH);
 }
 
 void loop() {
-    // Keyboard input (ignores \r and \n)
-    if (Serial.available() > 0) {
-        char c = Serial.read();
-        if (strchr("uilsadeprcbx", c) != NULL) printMode = c;
-    }
+  // Keyboard input (ignores \r and \n)
+  if (Serial.available() > 0) {
+    char c = Serial.read();
+    if (strchr("uilsadeprcbx", c) != NULL) printMode = c;
+  }
 
-    // Read all sensors every loop
-    readDistance();
-    readIrSensor();
-    readLineSensor();
+  // Read all sensors every loop
+  readDistance();
+  readIrSensor();
+  readLineSensor();
 
-    // Sensor printing (every 200 ms)
-    if (millis() - lastPrintTime >= PRINT_PERIOD_MS) {
-        lastPrintTime = millis();
+  // Sensor printing (every 200 ms)
+  if (millis() - lastPrintTime >= PRINT_PERIOD_MS) {
+    lastPrintTime = millis();
 
-        if (printMode == 'u' || printMode == 'b') printUltrasonicSensorReading();
-        if (printMode == 'i' || printMode == 'b') printIrSensorReading();
-        if (printMode == 'l' || printMode == 'b') printLineSensorReading();
-    }
+    if (printMode == 'u' || printMode == 'b') printUltrasonicSensorReading();
+    if (printMode == 'i' || printMode == 'b') printIrSensorReading();
+    if (printMode == 'l' || printMode == 'b') printLineSensorReading();
+  }
 
-    // Boundary check (PUSH, DONE and RECOVER handle the line themselves)
-    if (line_sensor == 1 && currentState != RECOVER && currentState != PUSH && currentState != DONE) {
-        changeState(RECOVER);
-    }
+  // Boundary check (PUSH, DONE and RECOVER handle the line themselves)
+  if (line_sensor == 1 && currentState != RECOVER && currentState != PUSH && currentState != DONE) {
+    changeState(RECOVER);
+  }
 
-    // FSM
-    switch (currentState) {
-        case SEARCH:
-            searchUpdate(distance, printMode == 's' || printMode == 'b');
-            break;
+  // FSM
+  switch (currentState) {
+    case SEARCH:
+      searchUpdate(distance, printMode == 's' || printMode == 'b');
+      break;
 
-        case APPROACH:
-            approachUpdate(distance, printMode == 'a' || printMode == 'b');
-            break;
+    case APPROACH:
+      approachUpdate(distance, printMode == 'a' || printMode == 'b');
+      break;
 
-        case IDENTIFY:
-            identifyUpdate(left_ir_sensor, right_ir_sensor, printMode == 'd' || printMode == 'b');
-            break;
+    case IDENTIFY:
+      identifyUpdate(left_ir_sensor, right_ir_sensor, printMode == 'd' || printMode == 'b');
+      break;
 
-        case REJECT:
-            rejectUpdate(distance, printMode == 'e' || printMode == 'b');
-            break;
+    case REJECT:
+      rejectUpdate(distance, printMode == 'e' || printMode == 'b');
+      break;
 
-        case PUSH:
-            pushUpdate(left_ir_sensor, right_ir_sensor, line_sensor, printMode == 'p' || printMode == 'b');
-            break;
+    case PUSH:
+      pushUpdate(left_ir_sensor, right_ir_sensor, line_sensor, printMode == 'p' || printMode == 'b');
+      break;
 
-        case DONE:
-            doneUpdate();
-            break;
+    case DONE:
+      doneUpdate();
+      break;
 
-        case RELOCATE:
-            relocateUpdate(printMode == 'r' || printMode == 'b');
-            break;
+    case RELOCATE:
+      relocateUpdate(distance, printMode == 'r' || printMode == 'b');
+      break;
 
-        case RECOVER:
-            recoverUpdate(printMode == 'c' || printMode == 'b');
-            break;
-    }
+    case RECOVER:
+      recoverUpdate(printMode == 'c' || printMode == 'b');
+      break;
+  }
 }
