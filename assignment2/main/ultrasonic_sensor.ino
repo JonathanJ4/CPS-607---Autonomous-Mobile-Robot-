@@ -3,12 +3,12 @@ const int TRIG_PIN = 3;
 const int ECHO_PIN = 4;
 
 // Timing
-const unsigned long PING_PERIOD_MS = 50;
+const unsigned long PING_PERIOD_MS = 40;
 const unsigned long ECHO_TIMEOUT_US = 6000;   // ~1 m max
 unsigned long lastPingTime = 0;
 
 // Distance + sliding window
-const int WINDOW_SIZE = 5;
+const int WINDOW_SIZE = 3;
 float readings[WINDOW_SIZE];
 int readingIndex = 0;
 int readingsCount = 0;

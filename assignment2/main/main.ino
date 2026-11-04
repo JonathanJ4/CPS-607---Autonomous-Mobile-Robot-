@@ -16,7 +16,6 @@ void changeState(int newState) {
     State previous = currentState;
     currentState = (State)newState;
     stopMove();
-    delay(500);   // pause between states
 
     Serial.print("State -> ");
     if (newState == SEARCH) Serial.println("SEARCH");

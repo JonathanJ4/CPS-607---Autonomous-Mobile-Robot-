@@ -14,13 +14,15 @@ void rejectStart() {
     float v, w;
 
     // time to turn: angle / angular speed
-    float phiT = pwmToWheelSpeed(TURN_SPEED);
-    wheelsToVelocity(-phiT, phiT, v, w);
+    float phiTR = pwmToWheelSpeed(rightTurn());
+    float phiTL = pwmToWheelSpeed(leftTurn());
+    wheelsToVelocity(-phiTR, phiTL, v, w);
     rejectTurnTime = (REJECT_TURN_DEG * PI / 180.0) / fabs(w) * 1000;
 
     // time to drive: distance / speed
-    float phiD = pwmToWheelSpeed(DRIVE_SPEED);
-    wheelsToVelocity(phiD, phiD, v, w);
+    float phiDR = pwmToWheelSpeed(rightDrive());
+    float phiDL = pwmToWheelSpeed(leftDrive());
+    wheelsToVelocity(phiDR, phiDL, v, w);
     rejectDriveTime = (REJECT_CM / v) * 1000;
 
     rejectTurning = true;

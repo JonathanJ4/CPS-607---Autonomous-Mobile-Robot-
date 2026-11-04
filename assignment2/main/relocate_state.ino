@@ -6,10 +6,11 @@ unsigned long relocateTime = 0;    // how long to drive (ms), calculated
 unsigned long relocateTimer = 0;
 
 void relocateStart() {
-    // DRIVE_SPEED (PWM) -> wheel speed -> robot speed
-    float phi = pwmToWheelSpeed(DRIVE_SPEED);
+    // drive speeds (PWM) -> wheel speed -> robot speed
+    float phiR = pwmToWheelSpeed(rightDrive());
+    float phiL = pwmToWheelSpeed(leftDrive());
     float v, w;
-    wheelsToVelocity(phi, phi, v, w);
+    wheelsToVelocity(phiR, phiL, v, w);
 
     // time = distance / speed
     relocateTime = (RELOCATE_CM / v) * 1000;

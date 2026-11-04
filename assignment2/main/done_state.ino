@@ -1,5 +1,4 @@
 // Tunables
-extern const int DRIVE_SPEED;
 const float DONE_CM = 5;           // back off the line (cm)
 
 // Vars
@@ -8,9 +7,10 @@ unsigned long doneTime = 0;
 unsigned long doneTimer = 0;
 
 void doneStart() {
-    float phi = pwmToWheelSpeed(DRIVE_SPEED);
+    float phiR = pwmToWheelSpeed(rightDrive());
+    float phiL = pwmToWheelSpeed(leftDrive());
     float v, w;
-    wheelsToVelocity(phi, phi, v, w);
+    wheelsToVelocity(phiR, phiL, v, w);
 
     doneTime = (DONE_CM / v) * 1000;
     doneBacking = true;
