@@ -1,5 +1,5 @@
 // Tunables
-const unsigned long BURST = 150;    // spin time per burst (ms)
+const unsigned long BURST = 175;    // spin time per burst (ms)
 const unsigned long PAUSE = 200;    // settle time before confirming (ms), >= WINDOW_SIZE * PING_PERIOD_MS
 const float THRESHOLD = 50;         // cm
 const int MAX_BURSTS = 30;

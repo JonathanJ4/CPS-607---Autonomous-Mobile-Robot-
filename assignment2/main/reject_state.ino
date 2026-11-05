@@ -1,6 +1,6 @@
 // Tunables
-const float REJECT_TURN_DEG = 180;            // tune on floor
-const float REJECT_CM = 30;
+const float REJECT_TURN_DEG = 300;            // tune on floor
+const float REJECT_CM = 40;
 const float REJECT_DETECT_CM = 50;
 const unsigned long REJECT_IGNORE_MS = 300;   // ignore old readings after the turn
 

@@ -1,6 +1,6 @@
 // Tunables
-const float RELOCATE_TURN_DEG = 30;           // spin before driving (deg), change later
-const float RELOCATE_CM = 30;                 // distance to move (cm)
+const float RELOCATE_TURN_DEG = 45;           // spin before driving (deg), change later
+const float RELOCATE_CM = 40;                 // distance to move (cm)
 const float RELOCATE_DETECT_CM = 50;          // saw a box closer than this -> approach
 const unsigned long RELOCATE_IGNORE_MS = 300; // ignore old readings after the turn
 

@@ -1,19 +1,21 @@
 // Tunables
-const unsigned long CORRECT_BURST = 60;     // small turn burst (ms), tune on floor
-const unsigned long IDENTIFY_PAUSE = 250;   // settle time before reading (ms)
+const unsigned long CORRECT_BURST = 60;     // max small turn burst (ms), tune on floor
+const unsigned long IDENTIFY_PAUSE = 250;   // both IRs must stay off this long before deciding black / lost (ms)
 const int MAX_CORRECTIONS = 5;
 
 // Vars
 bool identifyTurning = false;
 bool fromPush = false;
-unsigned long identifyTimer = 0;
+unsigned long identifyTimer = 0;    // start of the current turn burst
+unsigned long bothOffTimer = 0;     // when both IRs first went off
+bool bothOff = false;
 int corrections = 0;
 
 void identifyStart(bool cameFromPush) {
     fromPush = cameFromPush;
     corrections = 0;
     identifyTurning = false;
-    identifyTimer = millis();
+    bothOff = false;
 }
 
 void printIdentifyReading(bool left, bool right) {
@@ -32,39 +34,55 @@ void printIdentifyReading(bool left, bool right) {
 }
 
 void identifyUpdate(int leftIr, int rightIr, bool print) {
-    unsigned long wait = identifyTurning ? CORRECT_BURST : IDENTIFY_PAUSE;
-    if (millis() - identifyTimer < wait) return;
-    identifyTimer = millis();
-
-    // burst finished -> stop, then wait IDENTIFY_PAUSE before reading
-    if (identifyTurning) {
-        stopMove();
-        identifyTurning = false;
-        return;
-    }
-
     bool left = (leftIr == 1);
     bool right = (rightIr == 1);
 
-    if (print) printIdentifyReading(left, right);
-
+    // both see it -> white box, go right away (even mid-turn)
     if (left && right) {
-        changeState(PUSH);                   // white box
+        if (print) printIdentifyReading(left, right);
+        changeState(PUSH);
+        return;
     }
-    else if (!left && !right) {
+
+    // mid-turn: keep turning until the burst runs out
+    if (identifyTurning) {
+        if (millis() - identifyTimer >= CORRECT_BURST) {
+            stopMove();
+            identifyTurning = false;
+        }
+        return;
+    }
+
+    // both off -> only decide once it has stayed off for IDENTIFY_PAUSE
+    if (!left && !right) {
+        if (!bothOff) {
+            bothOff = true;
+            bothOffTimer = millis();
+            return;
+        }
+        if (millis() - bothOffTimer < IDENTIFY_PAUSE) return;
+
+        if (print) printIdentifyReading(left, right);
+
         // first read, not from a push -> black box. Otherwise we lost it.
         if (corrections == 0 && !fromPush) changeState(REJECT);
         else changeState(SEARCH);
+        return;
     }
-    else {
-        // only one sees it -> turn toward that side
-        if (corrections >= MAX_CORRECTIONS) {
-            changeState(SEARCH);
-            return;
-        }
-        corrections++;
-        if (left) spinLeft();
-        else spinRight();
-        identifyTurning = true;
+
+    // only one sees it -> turn toward that side
+    bothOff = false;
+
+    if (corrections >= MAX_CORRECTIONS) {
+        changeState(SEARCH);
+        return;
     }
+
+    if (print) printIdentifyReading(left, right);
+
+    corrections++;
+    if (left) spinLeft();
+    else spinRight();
+    identifyTurning = true;
+    identifyTimer = millis();
 }
