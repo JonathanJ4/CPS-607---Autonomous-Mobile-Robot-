@@ -1,13 +1,11 @@
-// Tunables
-const unsigned long CORRECT_BURST = 60;     // max small turn burst (ms), tune on floor
+const unsigned long CORRECT_BURST = 60;     // max small turn burst (ms)
 const unsigned long IDENTIFY_PAUSE = 250;   // both IRs must stay off this long before deciding black / lost (ms)
 const int MAX_CORRECTIONS = 5;
 
-// Vars
 bool identifyTurning = false;
 bool fromPush = false;
-unsigned long identifyTimer = 0;    // start of the current turn burst
-unsigned long bothOffTimer = 0;     // when both IRs first went off
+unsigned long identifyTimer = 0;   
+unsigned long bothOffTimer = 0;    
 bool bothOff = false;
 int corrections = 0;
 
@@ -37,7 +35,7 @@ void identifyUpdate(int leftIr, int rightIr, bool print) {
     bool left = (leftIr == 1);
     bool right = (rightIr == 1);
 
-    // both see it -> white box, go right away (even mid-turn)
+    // both ON -> white 
     if (left && right) {
         if (print) printIdentifyReading(left, right);
         changeState(PUSH);
@@ -53,7 +51,6 @@ void identifyUpdate(int leftIr, int rightIr, bool print) {
         return;
     }
 
-    // both off -> only decide once it has stayed off for IDENTIFY_PAUSE
     if (!left && !right) {
         if (!bothOff) {
             bothOff = true;
@@ -70,7 +67,6 @@ void identifyUpdate(int leftIr, int rightIr, bool print) {
         return;
     }
 
-    // only one sees it -> turn toward that side
     bothOff = false;
 
     if (corrections >= MAX_CORRECTIONS) {

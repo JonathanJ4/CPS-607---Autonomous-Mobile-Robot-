@@ -1,8 +1,6 @@
-// Robot dimensions (cm)
 const float WHEEL_RADIUS = 3.2;
 const float HALF_WHEELBASE = 6.85;   // b
 
-// PWM <-> wheel speed calibration from A1 (valid for PWM 127.5 to 255)
 const float M_F = 0.0381;
 const float C_F = 1.91;
 

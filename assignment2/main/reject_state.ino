@@ -1,10 +1,8 @@
-// Tunables
-const float REJECT_TURN_DEG = 300;            // tune on floor
+const float REJECT_TURN_DEG = 300;            
 const float REJECT_CM = 40;
 const float REJECT_DETECT_CM = 50;
-const unsigned long REJECT_IGNORE_MS = 300;   // ignore old readings after the turn
+const unsigned long REJECT_IGNORE_MS = 300;   
 
-// Vars
 bool rejectTurning = true;
 unsigned long rejectTimer = 0;
 unsigned long rejectTurnTime = 0;
@@ -12,14 +10,11 @@ unsigned long rejectDriveTime = 0;
 
 void rejectStart() {
     float v, w;
-
-    // time to turn: angle / angular speed
     float phiTR = pwmToWheelSpeed(rightTurn());
     float phiTL = pwmToWheelSpeed(leftTurn());
     wheelsToVelocity(-phiTR, phiTL, v, w);
     rejectTurnTime = (REJECT_TURN_DEG * PI / 180.0) / fabs(w) * 1000;
 
-    // time to drive: distance / speed
     float phiDR = pwmToWheelSpeed(rightDrive());
     float phiDL = pwmToWheelSpeed(leftDrive());
     wheelsToVelocity(phiDR, phiDL, v, w);
@@ -43,7 +38,7 @@ void rejectUpdate(float distance, bool print) {
     if (print) printRejectReading(distance);
 
     if (rejectTurning) {
-        // turn done -> drive away
+        // turn done -> drive
         if (elapsed >= rejectTurnTime) {
             rejectTurning = false;
             rejectTimer = millis();
@@ -54,7 +49,7 @@ void rejectUpdate(float distance, bool print) {
         if (elapsed >= REJECT_IGNORE_MS && distance > 0 && distance < REJECT_DETECT_CM) {
             changeState(APPROACH);
         }
-        // drove far enough -> search again
+        // after drive -> search again
         else if (elapsed >= rejectDriveTime) {
             changeState(SEARCH);
         }

@@ -13,11 +13,10 @@ enum State { SEARCH,
              RECOVER };
 State currentState = SEARCH;
 
-// u = ultrasonic | i = IR | l = line | s = search | a = approach | d = identify
-// e = reject | p = push | r = relocate | c = recover | b = all | x = stop
+// u = ultrasonic | i = IR | l = line | s = search | a = approach | d = identify | e = reject | p = push | r = relocate | c = recover | b = all | x = stop
 char printMode = 'b';
 unsigned long lastPrintTime = 0;
-const unsigned long PRINT_PERIOD_MS = 200;
+const unsigned long PRINT_PERIOD = 200;
 
 void changeState(int newState) {
   State previous = currentState;
@@ -54,12 +53,11 @@ void setup() {
 
   Serial.println("Print modes: u = Ultrasonic | i = IR | l = Line | s = Search | a = Approach | d = Identify | e = Reject | p = Push | r = Relocate | c = Recover | b = All | x = Stop");
 
-  delay(2000);  // time to put the robot down
+  delay(2000); 
   changeState(SEARCH);
 }
 
 void loop() {
-  // Keyboard input (ignores \r and \n)
   if (Serial.available() > 0) {
     char c = Serial.read();
     if (strchr("uilsadeprcbx", c) != NULL) printMode = c;
@@ -70,8 +68,8 @@ void loop() {
   readIrSensor();
   readLineSensor();
 
-  // Sensor printing (every 200 ms)
-  if (millis() - lastPrintTime >= PRINT_PERIOD_MS) {
+  // Sensor printing 
+  if (millis() - lastPrintTime >= PRINT_PERIOD) {
     lastPrintTime = millis();
 
     if (printMode == 'u' || printMode == 'b') printUltrasonicSensorReading();
@@ -79,7 +77,7 @@ void loop() {
     if (printMode == 'l' || printMode == 'b') printLineSensorReading();
   }
 
-  // Boundary check (PUSH, DONE and RECOVER handle the line themselves)
+  // Boundary check 
   if (line_sensor == 1 && currentState != RECOVER && currentState != PUSH && currentState != DONE) {
     changeState(RECOVER);
   }

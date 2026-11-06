@@ -1,12 +1,10 @@
-// Tunables
 const unsigned long BURST = 175;    // spin time per burst (ms)
 const unsigned long PAUSE = 200;    // settle time before confirming (ms), >= WINDOW_SIZE * PING_PERIOD_MS
 const float THRESHOLD = 50;         // cm
 const int MAX_BURSTS = 30;
 
-// Vars
 bool spinning = true;
-bool suspected = false;             // saw something while spinning, waiting to confirm
+bool suspected = false;           
 unsigned long timer = 0;
 int burstCount = 0;
 
@@ -39,14 +37,12 @@ void printSearchReading(float dist) {
 
 void searchUpdate(float distance, bool print) {
     if (spinning) {
-        // saw something mid-burst -> stop right away, then confirm after the pause
         if (distance > 0 && distance < THRESHOLD) {
             stopMove();
             spinning = false;
             suspected = true;
             timer = millis();
         }
-        // burst done -> stop and wait
         else if (millis() - timer >= BURST) {
             stopMove();
             spinning = false;
@@ -54,14 +50,12 @@ void searchUpdate(float distance, bool print) {
             timer = millis();
         }
     } else {
-        // pause done -> check distance on fresh readings
         if (millis() - timer >= PAUSE) {
             if (print) printSearchReading(distance);
 
             if (distance > 0 && distance < THRESHOLD) {
                 changeState(APPROACH);
             } else {
-                // nothing there (or false alarm) -> next burst
                 burstCount++;
                 if (burstCount >= MAX_BURSTS) {
                     changeState(RELOCATE);

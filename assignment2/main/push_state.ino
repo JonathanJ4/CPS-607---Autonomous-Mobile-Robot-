@@ -1,8 +1,6 @@
-// Tunables
-const unsigned long PUSH_TIMEOUT = 5000;   // give up if the line never shows (ms)
-const unsigned long LOST_MS = 150;         // both IRs must stay not-both-on this long (ms)
+const unsigned long PUSH_TIMEOUT = 7000;   // give up if the line never shows (ms) = 1m
+const unsigned long LOST = 150;         
 
-// Vars
 unsigned long pushTimer = 0;
 unsigned long notBothTimer = 0;
 bool notBoth = false;
@@ -28,7 +26,7 @@ void pushUpdate(int leftIr, int rightIr, int line, bool print) {
 
     if (print) printPushReading(left, right, line);
 
-    // reached the line -> box is across
+    // found line -> box is outside
     if (line == 1) {
         changeState(DONE);
         return;
@@ -47,7 +45,7 @@ void pushUpdate(int leftIr, int rightIr, int line, bool print) {
         if (!notBoth) {
             notBoth = true;
             notBothTimer = millis();
-        } else if (millis() - notBothTimer >= LOST_MS) {
+        } else if (millis() - notBothTimer >= LOST) {
             changeState(IDENTIFY);
         }
     }

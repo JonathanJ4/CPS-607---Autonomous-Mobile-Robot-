@@ -1,21 +1,19 @@
-// Pins
 const int RIGHT_MOTOR_1B = 5;
 const int RIGHT_MOTOR_1A = 6;
 const int LEFT_MOTOR_1B = 9;
 const int LEFT_MOTOR_1A = 10;
 
-// Base speeds (drive = forward/backward, turn = spinning in place)
+// Base speeds 
 const int RIGHT_DRIVE = 150;
 const int LEFT_DRIVE  = 150;
 const int RIGHT_TURN  = 130;
 const int LEFT_TURN   = 130;
 
-// Calibration adjustments (tweak these if one wheel is faster).
-// Positive = speed that wheel up, negative = slow it down.
+// adjustments 
 const int RIGHT_ADJ = 10;
 const int LEFT_ADJ  = 0;
 
-// Final speeds, clamped to valid PWM range
+// Final speeds
 int rightDrive() { return constrain(RIGHT_DRIVE + RIGHT_ADJ, 0, 255); }
 int leftDrive()  { return constrain(LEFT_DRIVE  + LEFT_ADJ,  0, 255); }
 int rightTurn()  { return constrain(RIGHT_TURN  + RIGHT_ADJ, 0, 255); }
@@ -49,7 +47,7 @@ void moveBackward() {
     analogWrite(LEFT_MOTOR_1B, 0);
 }
 
-// Spin clockwise in place
+// Spin clockwise
 void spinRight() {
     analogWrite(RIGHT_MOTOR_1A, 0);
     analogWrite(RIGHT_MOTOR_1B, rightTurn());
@@ -57,7 +55,7 @@ void spinRight() {
     analogWrite(LEFT_MOTOR_1B, leftTurn());
 }
 
-// Spin counter-clockwise in place
+// Spin counter-clockwise
 void spinLeft() {
     analogWrite(RIGHT_MOTOR_1A, rightTurn());
     analogWrite(RIGHT_MOTOR_1B, 0);

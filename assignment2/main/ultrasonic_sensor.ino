@@ -1,10 +1,8 @@
-// Pins
 const int TRIG_PIN = 3;
 const int ECHO_PIN = 4;
 
-// Timing
-const unsigned long PING_PERIOD_MS = 40;
-const unsigned long ECHO_TIMEOUT_US = 6000;   // ~1 m max
+const unsigned long PING_PERIOD = 40;
+const unsigned long ECHO_TIMEOUT = 6000;   
 unsigned long lastPingTime = 0;
 
 // Distance + sliding window
@@ -19,7 +17,6 @@ void ultrasonicSetup() {
     pinMode(ECHO_PIN, INPUT);
 }
 
-// Filter: average of the last few readings
 float filterDistance(float newDistance) {
     readings[readingIndex] = newDistance;
     readingIndex = (readingIndex + 1) % WINDOW_SIZE;
@@ -31,7 +28,7 @@ float filterDistance(float newDistance) {
 }
 
 void readDistance() {
-    if (millis() - lastPingTime < PING_PERIOD_MS) return;
+    if (millis() - lastPingTime < PING_PERIOD) return;
     lastPingTime = millis();
 
     digitalWrite(TRIG_PIN, LOW);
@@ -40,10 +37,10 @@ void readDistance() {
     delayMicroseconds(10);
     digitalWrite(TRIG_PIN, LOW);
 
-    unsigned long duration = pulseIn(ECHO_PIN, HIGH, ECHO_TIMEOUT_US);
+    unsigned long duration = pulseIn(ECHO_PIN, HIGH, ECHO_TIMEOUT);
 
     if (duration == 0) {
-        // No echo: reset the window so old values don't get averaged in
+        // No echo: reset the window 
         readingsCount = 0;
         readingIndex = 0;
         distance = -1.0;

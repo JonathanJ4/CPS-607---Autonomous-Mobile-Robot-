@@ -1,4 +1,3 @@
-// Pin
 const int LINE_PIN = 2;
 
 int line_sensor = HIGH;
