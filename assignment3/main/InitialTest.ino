@@ -8,38 +8,51 @@
 // ================= TUNING VALUES (edit here) =================
 
 // ---- Motor balance (per-wheel PWM scale) ----
-const float RIGHT_SCALE = 0.69;   // right motor is stronger -> scaled down
+const float RIGHT_SCALE = 0.62;   // right motor is stronger -> scaled down
 const float LEFT_SCALE = 1.00;
 
 // ---- Speed ----
-const float FORWARD_SPEED = 20.0; // cm/s
+const float FORWARD_SPEED = 26.0; // cm/s
 
 // ---- Wall following ----
-const float TARGET_DISTANCE = 15.0;  // cm
-const float SENSOR_SPACING = 13.0;   // cm between FR and BR sensors (MEASURE IT)
-const float MAX_OMEGA = 0.6;         // rad/s limit while following
+const float TARGET_DISTANCE = 8;  // cm
+const float SENSOR_SPACING = 14.0;   // cm between FR and BR sensors (MEASURE IT)
+const float MAX_OMEGA = 0.8;         // rad/s limit while following
 
 // PI gains: omega = -(Kp_d*e + Ki_d*Int(e) + Kp_h*theta + Ki_h*Int(theta))
 const float Kp_d = 0.035;
 const float Ki_d = 0.004;
 const float Kp_h = 1.5;
-const float Ki_h = 0.0;
+const float Ki_h = 0.1;
 const float INTEGRAL_LIMIT = 10.0;
 
-// ---- Corners ----
-const float FRONT_TURN_DIST = 15.0;  // cm: front wall -> left turn
-const int FRONT_HITS_NEEDED = 2;     // consecutive close readings
-const float WALL_LOST_DIST = 35.0;   // cm: farther than this = no wall
-const int LOST_COUNT = 2;            // consecutive lost readings = wall lost
+// ---- Smoothness / responsiveness ----
+const float DIST_DEADBAND = 0.5;     // cm: P term ignores errors smaller than this
+const float HEAD_DEADBAND = 0.02;    // rad (~1.1 deg)
+const float OMEGA_TAU = 0.08;        // s: low-pass time constant (smaller = faster, jerkier)
+const float OMEGA_SLEW = 4.0;        // rad/s^2: max rate of change of omega (bigger = faster)
 
+// ---- Left corner (in-place pivot) ----
+const float FRONT_TURN_DIST = 22.0;  // cm: front wall -> left turn
+const int FRONT_HITS_NEEDED = 2;     // consecutive close readings
 const float TURN_OMEGA = 3.0;        // rad/s pivot rate
-const float LEFT_TURN_SCALE = 1.0;   // raise if left pivot < 90 deg
-const float RIGHT_TURN_SCALE = 1.0;  // raise if right pivot < 90 deg
-const unsigned long ADVANCE_MS = 100; // drive on after BR loses wall, then pivot right
+const float LEFT_TURN_SCALE = 1.3;   // raise if left pivot < 90 deg
+
+// ---- Right corner (curved turn) ----
+// Arc radius = CURVE_SPEED / CURVE_OMEGA  (20 / 0.8 = 25 cm)
+const float CURVE_SPEED = 20.0;      // cm/s forward speed during the curve
+const float CURVE_OMEGA = 0.8;       // rad/s right-turn rate during the curve
+const int FR_REGAIN_COUNT = 2;       // consecutive valid FR readings to end the curve
+const unsigned long CURVE_TIMEOUT_MS = 4000;  // give up if FR never sees a wall
+
+const float WALL_LOST_DIST = 35.0;   // cm: farther than this = no wall
+const float CORNER_MAX_DIST = 28.0;  // FR must have been this close to count as a corner
+const int LOST_COUNT = 2;            // consecutive lost readings = wall lost
 
 // ---- Misc ----
 const unsigned long START_DELAY_MS = 3000;
 const bool DEBUG = true;             // set false to disable serial prints
+const int DEBUG_EVERY = 3;           // print every Nth controller update (serial is slow)
 
 // =============================================================
 
@@ -64,56 +77,60 @@ const float HALF_WHEELBASE = 6.85;  // cm
 const float M_F = 0.0381;
 const float C_F = 1.91;
 
-const unsigned long ADVANCE_TIMEOUT_MS = 1500;
-const unsigned long SEARCH_TIMEOUT_MS = 4000;
 const unsigned long SETTLE_MS = 250;
 
 const unsigned long LEFT_TURN_MS =
     (unsigned long)((PI / 2.0) / TURN_OMEGA * 1000.0 * LEFT_TURN_SCALE);
-const unsigned long RIGHT_TURN_MS =
-    (unsigned long)((PI / 2.0) / TURN_OMEGA * 1000.0 * RIGHT_TURN_SCALE);
 
 // ---------------- SENSOR FILTERING / TIMING ----------------
-const float FILTER_ALPHA = 0.5;  // EMA weight of new (median) value
-const unsigned long SENSOR_INTERVAL = 35;
-const unsigned long CONTROL_INTERVAL = 100;
+const float FILTER_ALPHA = 0.6;  // EMA weight of new (median) value
+// Raise SENSOR_INTERVAL to 25 if readings get erratic (ultrasonic cross-talk).
+const unsigned long SENSOR_INTERVAL = 15;   // ms between single-sensor reads
+const unsigned long CONTROL_INTERVAL = 40;  // min ms between controller updates
+const unsigned long SMOOTH_INTERVAL = 10;   // ms between motor command updates
 
 const int S_FRONT = 0;
 const int S_FR = 1;
 const int S_BR = 2;
 
+// Read order: side pair twice, then the front sensor once.
+// Side pair refreshes every 2 slots (40 ms), front every 5 slots (100 ms).
+const int PATTERN_LEN = 5;
+const int SLOT_PATTERN[PATTERN_LEN] = {S_FR, S_BR, S_FR, S_BR, S_FRONT};
+
 float filt[3] = {0, 0, 0};
 float hist[3][3];
 int histN[3] = {0, 0, 0};
 int lostCnt[3] = {0, 0, 0};
+int validStreak[3] = {0, 0, 0};   // consecutive valid readings
 bool haveData[3] = {false, false, false};
 int frontHits = 0;
 
 unsigned long lastSensorTime = 0;
 unsigned long lastControlTime = 0;
+unsigned long lastSmoothTime = 0;
 int sensorIndex = 0;
 bool sensorCycleComplete = false;
+int debugCounter = 0;
 
 // ---------------- FSM ----------------
 enum State {
   WAIT_START,
   FOLLOW,
   LEFT_PIVOT,
-  RIGHT_ADVANCE,
-  RIGHT_PIVOT,
   SETTLE,
-  RIGHT_SEARCH,
+  RIGHT_CURVE,
   HALTED
 };
 
 State state = WAIT_START;
-State afterSettle = FOLLOW;
 unsigned long stateStart = 0;
-bool brLostSeen = false;
-unsigned long brLostAt = 0;
 
 float integralDistance = 0;
 float integralHeading = 0;
+
+float omegaTarget = 0;  // what the PI controller wants
+float omegaCmd = 0;     // smoothed value actually sent to the motors
 
 // =====================================================
 // MOTORS (signed PWM: + = forward, - = reverse)
@@ -209,9 +226,11 @@ void processSideSample(int i, float raw) {
   bool valid = (raw > 0 && raw <= WALL_LOST_DIST);
   if (!valid) {
     if (lostCnt[i] < 100) lostCnt[i]++;
+    validStreak[i] = 0;
     return;
   }
   lostCnt[i] = 0;
+  if (validStreak[i] < 100) validStreak[i]++;
 
   hist[i][2] = hist[i][1];
   hist[i][1] = hist[i][0];
@@ -232,6 +251,7 @@ void resetSideFilters() {
   for (int i = S_FR; i <= S_BR; i++) {
     histN[i] = 0;
     lostCnt[i] = 0;
+    validStreak[i] = 0;
     haveData[i] = false;
   }
   frontHits = 0;
@@ -246,31 +266,40 @@ void updateSensors() {
   if (now - lastSensorTime < SENSOR_INTERVAL) return;
   lastSensorTime = now;
 
-  switch (sensorIndex) {
-    case 0: {
+  switch (SLOT_PATTERN[sensorIndex]) {
+    case S_FRONT: {
       float d = readDistance(FRONT_TRIG, FRONT_ECHO);
       if (d > 0 && d < FRONT_TURN_DIST) frontHits++;
       else frontHits = 0;
       break;
     }
-    case 1:
+    case S_FR:
       processSideSample(S_FR, readDistance(FR_TRIG, FR_ECHO));
       break;
-    case 2:
+    case S_BR:
       processSideSample(S_BR, readDistance(BR_TRIG, BR_ECHO));
-      sensorCycleComplete = true;
+      sensorCycleComplete = true;  // a fresh FR+BR pair is available
       break;
   }
-  sensorIndex = (sensorIndex + 1) % 3;
+  sensorIndex = (sensorIndex + 1) % PATTERN_LEN;
 }
 
 // =====================================================
 // PI WALL FOLLOWING
 // =====================================================
+
+// Shrinks the error toward zero inside +-db (no jump at the edge)
+float softDeadband(float x, float db) {
+  if (x > db) return x - db;
+  if (x < -db) return x + db;
+  return 0;
+}
+
+// Computes omegaTarget only. Does not touch the motors.
 void wallFollowController(float dt) {
   // Need both side readings to compute heading; otherwise go straight
   if (!haveData[S_FR] || !haveData[S_BR] || lostCnt[S_BR] >= LOST_COUNT) {
-    driveRobot(FORWARD_SPEED, 0);
+    omegaTarget = 0;
     return;
   }
 
@@ -286,8 +315,13 @@ void wallFollowController(float dt) {
   float distanceError = wallDistance - TARGET_DISTANCE;  // + = too far
   float headingError = theta;
 
-  float omegaUnsat = -(Kp_d * distanceError + Ki_d * integralDistance +
-                       Kp_h * headingError + Ki_h * integralHeading);
+  // P terms use deadbanded errors (calm near the target);
+  // I terms use the raw errors (so accuracy is not lost).
+  float dErrP = softDeadband(distanceError, DIST_DEADBAND);
+  float hErrP = softDeadband(headingError, HEAD_DEADBAND);
+
+  float omegaUnsat = -(Kp_d * dErrP + Ki_d * integralDistance +
+                       Kp_h * hErrP + Ki_h * integralHeading);
 
   // Anti-windup: only integrate while not saturated
   if (fabs(omegaUnsat) < MAX_OMEGA) {
@@ -297,10 +331,10 @@ void wallFollowController(float dt) {
                                 -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
   }
 
-  float omega = constrain(omegaUnsat, -MAX_OMEGA, MAX_OMEGA);
-  driveRobot(FORWARD_SPEED, omega);
+  omegaTarget = constrain(omegaUnsat, -MAX_OMEGA, MAX_OMEGA);
 
-  if (DEBUG) {
+  if (DEBUG && (++debugCounter >= DEBUG_EVERY)) {
+    debugCounter = 0;
     Serial.print("FR:");
     Serial.print(fr, 1);
     Serial.print(" BR:");
@@ -309,9 +343,29 @@ void wallFollowController(float dt) {
     Serial.print(wallDistance, 1);
     Serial.print(" Ang:");
     Serial.print(theta * 180.0 / PI, 1);
-    Serial.print(" W:");
-    Serial.println(omega, 3);
+    Serial.print(" Wt:");
+    Serial.print(omegaTarget, 3);
+    Serial.print(" Wc:");
+    Serial.println(omegaCmd, 3);
   }
+}
+
+// Runs every SMOOTH_INTERVAL ms: low-pass + slew-limit omega, then drive.
+void smoothAndDrive() {
+  unsigned long now = millis();
+  if (now - lastSmoothTime < SMOOTH_INTERVAL) return;
+  float dt = (now - lastSmoothTime) / 1000.0;
+  lastSmoothTime = now;
+
+  // 1) first-order low-pass toward the target
+  float a = dt / (OMEGA_TAU + dt);
+  float desired = omegaCmd + a * (omegaTarget - omegaCmd);
+
+  // 2) limit how fast omega may change
+  float maxStep = OMEGA_SLEW * dt;
+  omegaCmd += constrain(desired - omegaCmd, -maxStep, maxStep);
+
+  driveRobot(FORWARD_SPEED, omegaCmd);
 }
 
 // =====================================================
@@ -323,38 +377,47 @@ void enterState(State s) {
 
   switch (s) {
     case WAIT_START:
+      omegaCmd = 0;
+      omegaTarget = 0;
       stopMotors();
       break;
     case FOLLOW:
+      // omegaCmd is NOT reset: it keeps the last commanded turn rate
+      // (e.g. the end of a right curve), so the output ramps smoothly.
       integralDistance = 0;
       integralHeading = 0;
+      omegaTarget = 0;
       lastControlTime = millis();
+      lastSmoothTime = millis();
       sensorCycleComplete = false;
       if (DEBUG) Serial.println("-> FOLLOW");
       break;
     case LEFT_PIVOT:
       driveRobot(0, TURN_OMEGA);
-      afterSettle = FOLLOW;
       if (DEBUG) Serial.println("-> LEFT_PIVOT");
       break;
-    case RIGHT_ADVANCE:
-      brLostSeen = false;
-      driveRobot(FORWARD_SPEED, 0);
-      if (DEBUG) Serial.println("-> RIGHT_ADVANCE");
-      break;
-    case RIGHT_PIVOT:
-      driveRobot(0, -TURN_OMEGA);
-      afterSettle = RIGHT_SEARCH;
-      if (DEBUG) Serial.println("-> RIGHT_PIVOT");
-      break;
     case SETTLE:
+      omegaCmd = 0;
+      omegaTarget = 0;
       stopMotors();
       resetSideFilters();
       if (DEBUG) Serial.println("-> SETTLE");
       break;
-    case RIGHT_SEARCH:
-      driveRobot(FORWARD_SPEED, 0);
-      if (DEBUG) Serial.println("-> RIGHT_SEARCH");
+    case RIGHT_CURVE:
+      // Arc to the right: forward motion + negative omega.
+      // Throw away the stale FR history so the exit check only
+      // counts readings taken during/after the curve.
+      histN[S_FR] = 0;
+      haveData[S_FR] = false;
+      validStreak[S_FR] = 0;
+      omegaCmd = -CURVE_OMEGA;   // so FOLLOW can ramp out of the curve
+      driveRobot(CURVE_SPEED, -CURVE_OMEGA);
+      if (DEBUG) {
+        Serial.print("-> RIGHT_CURVE  last FR=");
+        Serial.print(filt[S_FR], 1);
+        Serial.print(" BR=");
+        Serial.println(filt[S_BR], 1);
+      }
       break;
     case HALTED:
       stopMotors();
@@ -375,49 +438,47 @@ void runFSM() {
       break;
 
     case FOLLOW:
-      // Priority 1: wall ahead -> left turn
+      // Priority 1: wall ahead -> left turn (in place)
       if (frontHits >= FRONT_HITS_NEEDED) {
         enterState(LEFT_PIVOT);
         return;
       }
-      // Priority 2: lost the wall on the right -> right corner
-      if (haveData[S_FR] && lostCnt[S_FR] >= LOST_COUNT) {
-        enterState(RIGHT_ADVANCE);
+      // Priority 2: front-right sensor lost the wall -> curve right.
+      // Only counts if the wall was close just before (filt keeps its last
+      // valid value), so a slow drift away from the wall is NOT a corner.
+      if (haveData[S_FR] && lostCnt[S_FR] >= LOST_COUNT &&
+          filt[S_FR] < CORNER_MAX_DIST) {
+        enterState(RIGHT_CURVE);
         return;
       }
-      // Normal PI control at fixed rate, once per fresh sensor cycle
+      // PI controller, once per fresh FR+BR pair
       if (sensorCycleComplete && now - lastControlTime >= CONTROL_INTERVAL) {
         float dt = (now - lastControlTime) / 1000.0;
         lastControlTime = now;
         sensorCycleComplete = false;
         wallFollowController(dt);
       }
+      // Smooth output, runs every loop
+      smoothAndDrive();
       break;
 
     case LEFT_PIVOT:
       if (now - stateStart >= LEFT_TURN_MS) enterState(SETTLE);
       break;
 
-      case RIGHT_ADVANCE:
-      // Pivot ADVANCE_MS after the front-right sensor lost the wall
-      // (back-right sensor is no longer used)
-      if (now - stateStart >= ADVANCE_MS) enterState(RIGHT_PIVOT);
-      break;
-
-    case RIGHT_PIVOT:
-      if (now - stateStart >= RIGHT_TURN_MS) enterState(SETTLE);
-      break;
-
     case SETTLE:
-      if (now - stateStart >= SETTLE_MS) enterState(afterSettle);
+      if (now - stateStart >= SETTLE_MS) enterState(FOLLOW);
       break;
 
-    case RIGHT_SEARCH:
-      // Drive straight until both side sensors see the new wall
-      if (haveData[S_FR] && haveData[S_BR] &&
-          lostCnt[S_FR] == 0 && lostCnt[S_BR] == 0) {
+    case RIGHT_CURVE:
+      // Keep arcing right until the front-right sensor sees a wall again
+      if (haveData[S_FR] && validStreak[S_FR] >= FR_REGAIN_COUNT) {
+        if (DEBUG) {
+          Serial.print("FR regained: ");
+          Serial.println(filt[S_FR], 1);
+        }
         enterState(FOLLOW);
-      } else if (now - stateStart > SEARCH_TIMEOUT_MS) {
+      } else if (now - stateStart > CURVE_TIMEOUT_MS) {
         enterState(HALTED);
       }
       break;
