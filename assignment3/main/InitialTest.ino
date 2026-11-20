@@ -15,15 +15,15 @@ const float LEFT_SCALE = 1.00;
 const float FORWARD_SPEED = 26.0; // cm/s
 
 // ---- Wall following ----
-const float TARGET_DISTANCE = 8;  // cm
+const float TARGET_DISTANCE = 15;  // cm
 const float SENSOR_SPACING = 14.0;   // cm between FR and BR sensors (MEASURE IT)
-const float MAX_OMEGA = 0.8;         // rad/s limit while following
+const float MAX_OMEGA = 0.6;         // rad/s limit while following
 
 // PI gains: omega = -(Kp_d*e + Ki_d*Int(e) + Kp_h*theta + Ki_h*Int(theta))
 const float Kp_d = 0.035;
 const float Ki_d = 0.004;
 const float Kp_h = 1.5;
-const float Ki_h = 0.1;
+const float Ki_h = 0.0;
 const float INTEGRAL_LIMIT = 10.0;
 
 // ---- Smoothness / responsiveness ----
